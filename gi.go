@@ -2,21 +2,17 @@ package main
 
 /*
 #include <girepository.h>
-#cgo pkg-config: gobject-introspection-1.0
 */
 import "C"
 import (
 	"fmt"
 	"log"
 	"os"
-	"reflect"
 	"strings"
 	"unsafe"
 )
 
-var p = fmt.Printf
-
-func main() {
+func dump() {
 	repo := C.g_irepository_get_default()
 	lib := os.Args[1]
 
@@ -89,20 +85,4 @@ func main() {
 	}
 	p("%d\n", nInfos)
 	p("%d object types\n", nObjects)
-}
-
-func toGStr(s string) *C.gchar {
-	return (*C.gchar)(unsafe.Pointer(C.CString(s)))
-}
-
-func fromGStr(s *C.gchar) string {
-	return C.GoString((*C.char)(unsafe.Pointer(s)))
-}
-
-func asBaseInfo(p interface{}) *C.GIBaseInfo {
-	return (*C.GIBaseInfo)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
-}
-
-func asCallableInfo(p interface{}) *C.GICallableInfo {
-	return (*C.GICallableInfo)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
 }
