@@ -99,7 +99,7 @@ func DumpEnumInfo(info *C.GIEnumInfo) {
 		DumpFunctionInfo(f)
 	}
 	storageType := C.g_enum_info_get_storage_type(info)
-	p("%s\n", TypeTagGetName(storageType))
+	p("%s\n", fromGStr(C.g_type_tag_to_string(storageType)))
 	errorDomain := fromGStr(C.g_enum_info_get_error_domain(info))
 	p("error domain %s\n", errorDomain)
 }
@@ -227,23 +227,109 @@ func DumpFieldInfo(info *C.GIFieldInfo) {
 }
 
 func DumpPropertyInfo(info *C.GIPropertyInfo) {
-	//TODO
+	_ = C.g_property_info_get_flags(info)
+	transfer := C.g_property_info_get_ownership_transfer(info)
+	p("transfer %v\n", transfer)
+	t := C.g_property_info_get_type(info)
+	p("type %v\n", t)
 }
 
 func DumpSignalInfo(info *C.GISignalInfo) {
-	//TODO
+	DumpCallableInfo(asCallableInfo(info))
+	_ = C.g_signal_info_get_flags(info) // deprecated
+	closure := C.g_signal_info_get_class_closure(info)
+	DumpVFuncInfo(closure)
+	true_stops_emit := C.g_signal_info_true_stops_emit(info)
+	p("return true stops emit %v\n", true_stops_emit)
 }
 
 func DumpVFuncInfo(info *C.GIVFuncInfo) {
-	//TODO
+	DumpCallableInfo(asCallableInfo(info))
+	flags := C.g_vfunc_info_get_flags(info)
+	if flags&C.GI_VFUNC_MUST_CHAIN_UP > 0 {
+		p("must chain up\n")
+	}
+	if flags&C.GI_VFUNC_MUST_OVERRIDE > 0 {
+		p("must override\n")
+	}
+	if flags&C.GI_VFUNC_MUST_NOT_OVERRIDE > 0 {
+		p("must not override\n")
+	}
+	if flags&C.GI_VFUNC_THROWS > 0 {
+		p("throws error\n")
+	}
+	offset := C.g_vfunc_info_get_offset(info)
+	p("offset %d\n", offset)
+	signal := C.g_vfunc_info_get_signal(info)
+	if signal != nil {
+		DumpSignalInfo(signal)
+	}
+	invoker := C.g_vfunc_info_get_invoker(info)
+	if invoker != nil {
+		DumpFunctionInfo(invoker)
+	}
 }
 
 func DumpArgInfo(info *C.GIArgInfo) {
-	//TODO
+	dataIndex := C.g_arg_info_get_closure(info)
+	p("data index %d\n", dataIndex)
+	destroyNotifyIndex := C.g_arg_info_get_destroy(info)
+	p("destroy notify index %d\n", destroyNotifyIndex)
+	direction := C.g_arg_info_get_direction(info)
+	switch direction {
+	case C.GI_DIRECTION_IN:
+		p("in arg\n")
+	case C.GI_DIRECTION_OUT:
+		p("out arg\n")
+	case C.GI_DIRECTION_INOUT:
+		p("in out arg\n")
+	}
+	transfer := C.g_arg_info_get_ownership_transfer(info)
+	p("transfer %s\n", TransferGetName(transfer))
+	scope := C.g_arg_info_get_scope(info)
+	p("scope %v\n", scope)
+	t := C.g_arg_info_get_type(info)
+	DumpTypeInfo(t)
+	mayBeNull := C.g_arg_info_may_be_null(info)
+	p("may be null %v\n", mayBeNull)
+	caller_allocates := C.g_arg_info_is_caller_allocates(info)
+	p("caller allocates %v\n", caller_allocates)
+	optional := C.g_arg_info_is_optional(info)
+	p("optional %v\n", optional)
+	isReturnValue := C.g_arg_info_is_return_value(info)
+	p("is return value %v\n", isReturnValue)
+	onlyUsefulInC := C.g_arg_info_is_skip(info)
+	p("is only useful in C %v\n", onlyUsefulInC)
 }
 
 func DumpTypeInfo(info *C.GITypeInfo) {
-	//TODO
+	isPointer := C.g_type_info_is_pointer(info)
+	p("is pointer %v\n", isPointer)
+	tag := C.g_type_info_get_tag(info)
+	p("tag %s\n", fromGStr(C.g_type_tag_to_string(tag)))
+	if tag&C.GI_TYPE_TAG_INTERFACE > 0 {
+		iface := C.g_type_info_get_interface(info)
+		_ = iface
+	}
+	if tag&C.GI_TYPE_TAG_ARRAY > 0 {
+		length := C.g_type_info_get_array_length(info)
+		p("array length %d\n", length)
+		fixedSize := C.g_type_info_get_array_fixed_size(info)
+		p("array fixed size %d\n", fixedSize)
+		isZeroTerminated := C.g_type_info_is_zero_terminated(info)
+		p("is zero terminated %v\n", isZeroTerminated)
+		arrayType := C.g_type_info_get_array_type(info)
+		switch arrayType {
+		case C.GI_ARRAY_TYPE_C:
+			p("c array\n")
+		case C.GI_ARRAY_TYPE_ARRAY:
+			p("GArray\n")
+		case C.GI_ARRAY_TYPE_PTR_ARRAY:
+			p("GPtrArray\n")
+		case C.GI_ARRAY_TYPE_BYTE_ARRAY:
+			p("GByteArray\n")
+		}
+	}
 }
 
 func DumpUnionInfo(info *C.GIUnionInfo) {
@@ -285,33 +371,6 @@ func DumpConstantInfo(info *C.GIConstantInfo) {
 	p("value %v\n", value)
 	t := C.g_constant_info_get_type(info)
 	DumpTypeInfo(t)
-}
-
-func TypeTagGetName(t C.GITypeTag) (ret string) {
-	return map[C.GITypeTag]string{
-		C.GI_TYPE_TAG_VOID:      "void",
-		C.GI_TYPE_TAG_BOOLEAN:   "bool",
-		C.GI_TYPE_TAG_INT8:      "int8",
-		C.GI_TYPE_TAG_UINT8:     "uint8",
-		C.GI_TYPE_TAG_INT16:     "int16",
-		C.GI_TYPE_TAG_UINT16:    "uint16",
-		C.GI_TYPE_TAG_INT32:     "int32",
-		C.GI_TYPE_TAG_UINT32:    "uint32",
-		C.GI_TYPE_TAG_INT64:     "int64",
-		C.GI_TYPE_TAG_UINT64:    "uint64",
-		C.GI_TYPE_TAG_FLOAT:     "float",
-		C.GI_TYPE_TAG_DOUBLE:    "double",
-		C.GI_TYPE_TAG_GTYPE:     "gtype",
-		C.GI_TYPE_TAG_UTF8:      "utf8",
-		C.GI_TYPE_TAG_FILENAME:  "filename",
-		C.GI_TYPE_TAG_ARRAY:     "array",
-		C.GI_TYPE_TAG_INTERFACE: "interface",
-		C.GI_TYPE_TAG_GLIST:     "glist",
-		C.GI_TYPE_TAG_GSLIST:    "gslist",
-		C.GI_TYPE_TAG_GHASH:     "ghash",
-		C.GI_TYPE_TAG_ERROR:     "error",
-		C.GI_TYPE_TAG_UNICHAR:   "unichar",
-	}[t]
 }
 
 func TransferGetName(t C.GITransfer) string {

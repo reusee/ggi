@@ -41,7 +41,8 @@ func main() {
 			p("Attr %s = %s\n", C.GoString(key), C.GoString(value))
 		}
 		t := C.g_base_info_get_type(baseInfo) // type
-		switch t {                            // dump
+		p("%s\n", fromGStr(C.g_info_type_to_string(t)))
+		switch t { // dump
 		case C.GI_INFO_TYPE_OBJECT:
 			info := (*C.GIObjectInfo)(unsafe.Pointer(baseInfo))
 			p("Object\n")
