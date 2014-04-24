@@ -2,83 +2,170 @@ package main
 
 /*
 #include <girepository.h>
+#include <gobject/gobject.h>
 */
 import "C"
+import (
+	"strings"
+)
 
 func (self *Generator) GenFunction(info *C.GIFunctionInfo) {
+	// name
+	name := fromGStr(C.g_base_info_get_name(asBaseInfo(info)))
+	self.currentFunctionName = name
+	goName := convertFuncName(name)
+	w(self.FuncsWriter, "func %s", goName)
 
-	// symbol
-	symbol := fromGStr(C.g_function_info_get_symbol(info))
-	p("SYMBOL %s\n", symbol)
-
-	// error
-	throwsError := C.g_callable_info_can_throw_gerror(asCallableInfo(info)) == True
-	if throwsError {
-		p("THROWS ERROR\n")
-	}
-
-	// args
+	// collect args
+	var inArgs, outArgs []*C.GIArgInfo
 	nArgs := C.g_callable_info_get_n_args(asCallableInfo(info))
 	for i := C.gint(0); i < nArgs; i++ {
 		arg := C.g_callable_info_get_arg(asCallableInfo(info), i)
-		argName := fromGStr(C.g_base_info_get_name(asBaseInfo(arg)))
-		argType := C.g_arg_info_get_type(arg)
-		argTypeTag := C.g_type_info_get_tag(argType)
-		argTypeTagRepr := fromGStr(C.g_type_tag_to_string(argTypeTag))
 		argDirection := C.g_arg_info_get_direction(arg)
-		p("%s %s %s", argName, argTypeTagRepr, argDirectionToString(argDirection))
-		argIsPointer := C.g_type_info_is_pointer(argType) == True
-		if argIsPointer {
-			p(" POINTER")
+		switch argDirection {
+		case C.GI_DIRECTION_IN:
+			inArgs = append(inArgs, arg)
+		case C.GI_DIRECTION_OUT:
+			outArgs = append(outArgs, arg)
+		case C.GI_DIRECTION_INOUT:
+			inArgs = append(inArgs, arg)
+			outArgs = append(outArgs, arg)
 		}
-		argMayBeNull := C.g_arg_info_may_be_null(arg) == True
-		if argMayBeNull {
-			p(" NULLABLE")
-		}
+	}
+
+	// output in args
+	w(self.FuncsWriter, "(")
+	for _, arg := range inArgs {
+		argName := convertArgName(fromGStr(C.g_base_info_get_name(asBaseInfo(arg))))
+		goTypeStr := self.getGoTypeStr(C.g_arg_info_get_type(arg))
+		/*
 		argCallerAllocates := C.g_arg_info_is_caller_allocates(arg) == True
 		if argCallerAllocates {
-			p(" CALLER_ALLOCATES")
+			goTypeStr = "*" + goTypeStr
 		}
-		argIsOptional := C.g_arg_info_is_optional(arg) == True
-		if argIsOptional { //TODO will it occur?
-			p(" OPTIONAL")
-		}
-		argSkip := C.g_arg_info_is_skip(arg) == True
-		if argSkip { //TODO will it occur?
-			p(" SKIP")
-		}
-		if argTypeTag == C.GI_TYPE_TAG_INTERFACE {
-			ifaceInfo := C.g_type_info_get_interface(argType)
-			if ifaceInfo != nil {
-				ifaceType := C.g_base_info_get_type(ifaceInfo)
-				ifaceName := fromGStr(C.g_base_info_get_name(ifaceInfo))
-				p(" INTERFACE %s %s", fromGStr(C.g_info_type_to_string(ifaceType)), ifaceName)
-			}
-		}
-		if argTypeTag == C.GI_TYPE_TAG_ARRAY {
-			arrayType := C.g_type_info_get_array_type(argType)
-			p(" ARRAY of %s", ArrayTypeToString(arrayType))
-			if arrayType == C.GI_ARRAY_TYPE_C {
-				elemType := C.g_type_info_get_param_type(argType, 0)
-				elemTypeTag := C.g_type_info_get_tag(elemType)
-				p(" %s", fromGStr(C.g_type_tag_to_string(elemTypeTag)))
-			}
-		}
-		p("\n")
+		*/
+		w(self.FuncsWriter, "%s %s,", argName, goTypeStr)
 	}
+	w(self.FuncsWriter, ")")
+
+	w(self.FuncsWriter, "{}\n") //TODO body
+
+	// symbol
+	symbol := fromGStr(C.g_function_info_get_symbol(info))
+	_ = symbol
+
+	// error
+	throwsError := C.g_callable_info_can_throw_gerror(asCallableInfo(info)) == True
+	_ = throwsError
+
+	// args
+	/*
+		nArgs := C.g_callable_info_get_n_args(asCallableInfo(info))
+		for i := C.gint(0); i < nArgs; i++ {
+			argCallerAllocates := C.g_arg_info_is_caller_allocates(arg) == True
+			if argCallerAllocates {
+				p(" CALLER_ALLOCATES")
+			}
+			if argTypeTag == C.GI_TYPE_TAG_ARRAY {
+				arrayType := C.g_type_info_get_array_type(argType)
+				p(" ARRAY of %s", ArrayTypeToString(arrayType))
+				if arrayType == C.GI_ARRAY_TYPE_C {
+					elemType := C.g_type_info_get_param_type(argType, 0)
+					elemTypeTag := C.g_type_info_get_tag(elemType)
+					p(" %s", fromGStr(C.g_type_tag_to_string(elemTypeTag)))
+				}
+			}
+			p("\n")
+		}
+	*/
 
 	// return
 	returnType := C.g_callable_info_get_return_type(asCallableInfo(info))
 	_ = returnType
 	//TODO same as arg type
 	mayReturnNull := C.g_callable_info_may_return_null(asCallableInfo(info)) == True
-	if mayReturnNull {
-		p("MAY_RETURN_NULL\n")
-	}
+	_ = mayReturnNull
 	skipReturn := C.g_callable_info_skip_return(asCallableInfo(info)) == True
-	if skipReturn {
-		p("SKIP_RETURN\n")
-	}
+	_ = skipReturn
 
-	p("\n")
+}
+
+func convertFuncName(cName string) string {
+	parts := strings.Split(cName, "_")
+	for i, part := range parts {
+		parts[i] = strings.Title(part)
+	}
+	return strings.Join(parts, "")
+}
+
+func convertArgName(name string) string {
+	if isGoKeyword(name) {
+		return name + "_"
+	}
+	return name
+}
+
+func (self *Generator) getGoTypeStr(typeInfo *C.GITypeInfo) (ret string) {
+	argTypeTag := C.g_type_info_get_tag(typeInfo)
+	// map to basic type
+	ret = tagMapToGoType(argTypeTag)
+	if ret != "" {
+		if C.g_type_info_is_pointer(typeInfo) == True && ret != "string" { // is pointer
+			ret = "*" + ret
+		}
+		return
+	}
+	// complex type
+	if argTypeTag == C.GI_TYPE_TAG_INTERFACE {
+		ifaceInfo := C.g_type_info_get_interface(typeInfo) //GIBaseInfo
+		if ifaceInfo != nil {
+			ifaceType := C.g_base_info_get_type(ifaceInfo) //GIInfoType
+			ifaceName := fromGStr(C.g_base_info_get_name(ifaceInfo))
+			switch ifaceType {
+			case C.GI_INFO_TYPE_STRUCT:
+				/*
+				ret = "*C." + strings.ToUpper(self.CPrefix) + ifaceName
+				p("%s %s\n", self.currentFunctionName, ifaceName)
+				return
+				*/
+				//TODO we need c:type here. girepository is not exposing.
+			default:
+				//p("INTERFACE %s %s\n", fromGStr(C.g_info_type_to_string(ifaceType)), ifaceName)
+			}
+		}
+	}
+	// fallback
+	return "interface{}"
+}
+
+func tagMapToGoType(tag C.GITypeTag) string {
+	switch tag {
+	case C.GI_TYPE_TAG_BOOLEAN:
+		return "bool"
+	case C.GI_TYPE_TAG_INT8:
+		return "int8"
+	case C.GI_TYPE_TAG_UINT8:
+		return "uint8"
+	case C.GI_TYPE_TAG_INT16:
+		return "int16"
+	case C.GI_TYPE_TAG_UINT16:
+		return "uint16"
+	case C.GI_TYPE_TAG_INT32:
+		return "int32"
+	case C.GI_TYPE_TAG_UINT32:
+		return "uint32"
+	case C.GI_TYPE_TAG_INT64:
+		return "int64"
+	case C.GI_TYPE_TAG_UINT64:
+		return "uint64"
+	case C.GI_TYPE_TAG_FLOAT:
+		return "float32"
+	case C.GI_TYPE_TAG_DOUBLE:
+		return "float64"
+	case C.GI_TYPE_TAG_UTF8, C.GI_TYPE_TAG_FILENAME:
+		return "string"
+	case C.GI_TYPE_TAG_UNICHAR:
+		return "rune"
+	}
+	return ""
 }

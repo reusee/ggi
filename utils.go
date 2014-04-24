@@ -2,7 +2,7 @@ package main
 
 /*
 #include <girepository.h>
-#cgo pkg-config: gobject-introspection-1.0
+#cgo pkg-config: gobject-introspection-1.0 gobject-2.0
 gboolean T = TRUE;
 gboolean F = FALSE;
 */
@@ -15,9 +15,40 @@ import (
 
 var (
 	p     = fmt.Printf
+	w     = fmt.Fprintf
 	True  = C.T
 	False = C.F
 )
+
+func isGoKeyword(s string) bool {
+	return map[string]bool{
+		"break":       true,
+		"default":     true,
+		"func":        true,
+		"interface":   true,
+		"select":      true,
+		"case":        true,
+		"defer":       true,
+		"go":          true,
+		"map":         true,
+		"struct":      true,
+		"chan":        true,
+		"else":        true,
+		"goto":        true,
+		"package":     true,
+		"switch":      true,
+		"const":       true,
+		"fallthrough": true,
+		"if":          true,
+		"range":       true,
+		"type":        true,
+		"continue":    true,
+		"for":         true,
+		"import":      true,
+		"return":      true,
+		"var":         true,
+	}[s]
+}
 
 func toGStr(s string) *C.gchar {
 	return (*C.gchar)(unsafe.Pointer(C.CString(s)))
@@ -37,6 +68,10 @@ func asCallableInfo(p interface{}) *C.GICallableInfo {
 
 func asFunctionInfo(p interface{}) *C.GIFunctionInfo {
 	return (*C.GIFunctionInfo)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
+}
+
+func asRegisteredTypeInfo(p interface{}) *C.GIRegisteredTypeInfo {
+	return (*C.GIRegisteredTypeInfo)(unsafe.Pointer(reflect.ValueOf(p).Pointer()))
 }
 
 func argDirectionToString(d C.GIDirection) (ret string) {

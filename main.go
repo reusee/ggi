@@ -21,5 +21,5 @@ func main() {
 	}
 	lib := os.Args[1]
 
-	Gen(lib, outDir)
+	Gen(lib, outDir, os.Args[3:])
 }
